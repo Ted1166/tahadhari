@@ -1,69 +1,137 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+type Entity = { kind: string; value: string };
+type Reported = { kind: string; value: string; report_count: number };
+type Result = {
+  verdict: "safe" | "suspicious" | "scam";
+  scamType: string;
+  redFlags: string[];
+  explanation: string;
+  nextSteps: string[];
+  entities: Entity[];
+  community: Reported[];
+};
+
+const labels = {
+  en: { safe: "Looks safe", suspicious: "Suspicious", scam: "Scam", flags: "Red flags found", steps: "What to do now", community: "Reported by other users", times: "reports" },
+  sw: { safe: "Inaonekana salama", suspicious: "Ina shaka", scam: "Ulaghai", flags: "Dalili za hatari", steps: "Cha kufanya sasa", community: "Imeripotiwa na watumiaji", times: "ripoti" },
+  sheng: { safe: "Iko poa", suspicious: "Ina shaka", scam: "Ni uwizi", flags: "Red flags zilizopatikana", steps: "Fanya hivi sasa", community: "Imeripotiwa na wasee", times: "ripoti" }
+} as const;
+
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1]);
+    r.onerror = () => reject(new Error("Could not read the image"));
+    r.readAsDataURL(file);
+  });
+}
 
 export default function Home() {
+  const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [lang, setLang] = useState<"en" | "sw" | "sheng">("en");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<Result | null>(null);
+  const [reported, setReported] = useState<string[]>([]);
+  const t = labels[lang];
+
+  async function check() {
+    setBusy(true);
+    setError("");
+    setResult(null);
+    setReported([]);
+    try {
+      const image = file ? { mediaType: file.type, data: await toBase64(file) } : undefined;
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, image, lang })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Check failed");
+      setResult(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Check failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function report(e: Entity) {
+    const res = await fetch("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...e, scamType: result?.scamType })
+    });
+    if (res.ok) setReported((r) => [...r, e.kind + ":" + e.value]);
+    else setError("Could not save the report. Try again.");
+  }
+
+  const isReported = (e: Entity) => result?.community.find((c) => c.kind === e.kind && c.value === e.value);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main>
+      <h1>Tahadhari</h1>
+      <p className="sub">Paste a suspicious SMS or WhatsApp message, or upload a screenshot. Get a verdict, the red flags and what to do next.</p>
+
+      <label htmlFor="msg" className="tag">Message</label>
+      <textarea id="msg" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the message here" />
+
+      <div className="row">
+        <select aria-label="Language" value={lang} onChange={(e) => setLang(e.target.value as typeof lang)}>
+          <option value="en">English</option>
+          <option value="sw">Kiswahili</option>
+          <option value="sheng">Sheng</option>
+        </select>
+        <input className="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Screenshot" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <button onClick={check} disabled={busy || (!text.trim() && !file)}>{busy ? "Checking" : "Check message"}</button>
+      </div>
+
+      {error && <p className="error" role="alert">{error}</p>}
+
+      {result && (
+        <section className={"result " + result.verdict} aria-live="polite">
+          <p className="verdict">{t[result.verdict]}</p>
+          <p>{result.explanation}</p>
+
+          {result.redFlags.length > 0 && (
+            <>
+              <h2>{t.flags}</h2>
+              <ul>{result.redFlags.map((f) => <li key={f}>{f}</li>)}</ul>
+            </>
+          )}
+
+          <h2>{t.steps}</h2>
+          <ol>{result.nextSteps.map((s) => <li key={s}>{s}</li>)}</ol>
+
+          {result.entities.length > 0 && (
+            <>
+              <h2>{t.community}</h2>
+              {result.entities.map((e) => {
+                const hit = isReported(e);
+                const key = e.kind + ":" + e.value;
+                return (
+                  <div className="match" key={key}>
+                    <span>
+                      {e.kind} {e.value}
+                      <span className="tag">{hit ? " - " + hit.report_count + " " + t.times : ""}</span>
+                    </span>
+                    {result.verdict !== "safe" && (
+                      <button className="ghost" disabled={reported.includes(key)} onClick={() => report(e)}>
+                        {reported.includes(key) ? "Reported" : "Report this"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </section>
+      )}
+    </main>
   );
 }
