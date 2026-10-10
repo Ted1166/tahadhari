@@ -21,13 +21,23 @@ export async function findReported(entities: Entity[]): Promise<Reported[]> {
 }
 
 export async function saveReport(e: Entity, scamType: string, note: string) {
-    const { error } = await client().rpc("report_entity", {
-        p_kind: e.kind,
-        p_value: e.value,
-        p_scam: scamType,
-        p_note: note
-    });
-    if (error) throw new Error(error.message);
+    const db = client();
+    const ins = await db.from("reports").insert({ kind: e.kind, value: e.value, scam_type: scamType, note });
+    if (ins.error) throw new Error("reports insert: " + ins.error.message);
+
+    const cur = await db.from("entities").select("id,report_count").eq("kind", e.kind).eq("value", e.value).maybeSingle();
+    if (cur.error) throw new Error("entities lookup: " + cur.error.message);
+
+    if (cur.data) {
+        const up = await db
+            .from("entities")
+            .update({ report_count: cur.data.report_count + 1, last_seen: new Date().toISOString() })
+            .eq("id", cur.data.id);
+        if (up.error) throw new Error("entities update: " + up.error.message);
+    } else {
+        const add = await db.from("entities").insert({ kind: e.kind, value: e.value });
+        if (add.error) throw new Error("entities insert: " + add.error.message);
+    }
 }
 
 export async function getChatLang(chatId: number): Promise<"en" | "sw" | "sheng"> {
