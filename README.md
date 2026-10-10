@@ -20,7 +20,7 @@ The community table starts empty and fills only from real user reports.
 ## Setup
 
 1. `npm install`
-2. Copy `.env.example` to `.env.local` and fill in the values.
+2. Copy `.env` to `.env.local` and fill in the values.
 3. Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor.
 4. `npm run dev`, then open http://localhost:3000
 
