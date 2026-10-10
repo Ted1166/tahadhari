@@ -29,3 +29,25 @@ export async function saveReport(e: Entity, scamType: string, note: string) {
     });
     if (error) throw new Error(error.message);
 }
+
+export async function getChatLang(chatId: number): Promise<"en" | "sw" | "sheng"> {
+    const { data } = await client().from("chat_prefs").select("lang").eq("chat_id", chatId).maybeSingle();
+    return data && ["en", "sw", "sheng"].includes(data.lang) ? data.lang : "en";
+}
+
+export async function setChatLang(chatId: number, lang: string) {
+    const { error } = await client().from("chat_prefs").upsert({ chat_id: chatId, lang });
+    if (error) throw new Error(error.message);
+}
+
+export async function listReported(minReports: number, limit: number): Promise<Reported[]> {
+    const { data, error } = await client()
+        .from("entities")
+        .select("kind,value,report_count,last_seen")
+        .gte("report_count", minReports)
+        .order("report_count", { ascending: false })
+        .order("last_seen", { ascending: false })
+        .limit(limit);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+}

@@ -69,3 +69,21 @@ export async function classify(input: {
     if (start < 0 || end < start) throw new Error("Model returned no JSON");
     return verdictSchema.parse(JSON.parse(raw.slice(start, end + 1)));
 }
+
+export async function chatReply(input: {
+    messages: { role: "user" | "assistant"; content: string }[];
+    context: { verdict: string; scamType: string; explanation: string; redFlags: string[] };
+    lang: Lang;
+}): Promise<string> {
+    const client = new Anthropic();
+    const system = `You are the follow-up assistant inside Tahadhari, a mobile money scam checker for people in Kenya. The user has just checked a message. Result: verdict ${input.context.verdict}, type ${input.context.scamType}. Explanation: ${input.context.explanation}. Red flags: ${input.context.redFlags.join("; ") || "none"}.
+
+Answer the user's question in ${languageName[input.lang]}, in under 120 words, with concrete steps. If they already sent money or shared a PIN: contact Safaricom immediately, keep the M-Pesa transaction code, forward the scam message to 333, and report to the police on 999 or 112. Never promise that money will be recovered or reversed. Never ask for a PIN or password. If you do not know, say so and point them to their provider.`;
+    const res = await client.messages.create({
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
+        max_tokens: 500,
+        system,
+        messages: input.messages
+    });
+    return res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+}

@@ -12,6 +12,7 @@ type Result = {
   nextSteps: string[];
   entities: Entity[];
   community: Reported[];
+  limited?: boolean;
 };
 
 const labels = {
@@ -37,6 +38,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [reported, setReported] = useState<string[]>([]);
+  const [chat, setChat] = useState<{ role: string; content: string }[]>([]);
+  const [q, setQ] = useState("");
+  const [asking, setAsking] = useState(false);
   const t = labels[lang];
 
   async function check() {
@@ -44,6 +48,7 @@ export default function Home() {
     setError("");
     setResult(null);
     setReported([]);
+    setChat([]);
     try {
       const image = file ? { mediaType: file.type, data: await toBase64(file) } : undefined;
       const res = await fetch("/api/analyze", {
@@ -71,12 +76,39 @@ export default function Home() {
     else setError("Could not save the report. Try again.");
   }
 
+  async function ask() {
+    if (!q.trim() || !result) return;
+    const next = [...chat, { role: "user", content: q.trim() }];
+    setChat(next);
+    setQ("");
+    setAsking(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: next,
+          lang,
+          context: { verdict: result.verdict, scamType: result.scamType, explanation: result.explanation, redFlags: result.redFlags }
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Chat failed");
+      setChat([...next, { role: "assistant", content: json.reply }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Chat failed");
+    } finally {
+      setAsking(false);
+    }
+  }
+
   const isReported = (e: Entity) => result?.community.find((c) => c.kind === e.kind && c.value === e.value);
 
   return (
     <main>
       <h1>Tahadhari</h1>
       <p className="sub">Paste a suspicious SMS or WhatsApp message, or upload a screenshot. Get a verdict, the red flags and what to do next.</p>
+      <p><a href="/reported">See reported numbers and links</a></p>
 
       <label htmlFor="msg" className="tag">Message</label>
       <textarea id="msg" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the message here" />
@@ -97,6 +129,7 @@ export default function Home() {
         <section className={"result " + result.verdict} aria-live="polite">
           <p className="verdict">{t[result.verdict]}</p>
           <p>{result.explanation}</p>
+          {result.limited && <p className="tag">Limited check: the AI was unavailable.</p>}
 
           {result.redFlags.length > 0 && (
             <>
@@ -130,6 +163,20 @@ export default function Home() {
               })}
             </>
           )}
+
+          <h2>Ask a follow-up</h2>
+          {chat.map((m, i) => <p key={i} className={"bubble " + m.role}>{m.content}</p>)}
+          <div className="row">
+            <input
+              className="file ask"
+              aria-label="Follow-up question"
+              placeholder="For example: I already sent money, what now?"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") ask(); }}
+            />
+            <button onClick={ask} disabled={asking || !q.trim()}>{asking ? "Thinking" : "Ask"}</button>
+          </div>
         </section>
       )}
     </main>

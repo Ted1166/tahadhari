@@ -193,3 +193,24 @@ li {
   margin-top: 20px;
   color: var(--scam);
 }
+
+.ask {
+  flex: 1;
+  min-width: 200px;
+}
+
+.bubble {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+}
+
+.bubble.user {
+  background: var(--bg);
+}
+
+a {
+  color: var(--brand);
+}
