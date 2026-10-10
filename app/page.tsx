@@ -16,9 +16,9 @@ type Result = {
 };
 
 const labels = {
-  en: { safe: "Looks safe", suspicious: "Suspicious", scam: "Scam", flags: "Red flags found", steps: "What to do now", community: "Reported by other users", times: "reports" },
-  sw: { safe: "Inaonekana salama", suspicious: "Ina shaka", scam: "Ulaghai", flags: "Dalili za hatari", steps: "Cha kufanya sasa", community: "Imeripotiwa na watumiaji", times: "ripoti" },
-  sheng: { safe: "Iko poa", suspicious: "Ina shaka", scam: "Ni uwizi", flags: "Red flags zilizopatikana", steps: "Fanya hivi sasa", community: "Imeripotiwa na wasee", times: "ripoti" }
+  en: { safe: "Looks safe", suspicious: "Suspicious", scam: "Scam", flags: "Red flags found", steps: "What to do now", community: "Reported by other users", found: "Numbers and links in this message", times: "reports" },
+  sw: { safe: "Inaonekana salama", suspicious: "Ina shaka", scam: "Ulaghai", flags: "Dalili za hatari", steps: "Cha kufanya sasa", community: "Imeripotiwa na watumiaji", found: "Nambari na viungo kwenye ujumbe huu", times: "ripoti" },
+  sheng: { safe: "Iko poa", suspicious: "Ina shaka", scam: "Ni uwizi", flags: "Red flags zilizopatikana", steps: "Fanya hivi sasa", community: "Imeripotiwa na wasee", found: "Namba na links kwenye message hii", times: "ripoti" }
 } as const;
 
 function toBase64(file: File): Promise<string> {
@@ -73,7 +73,7 @@ export default function Home() {
       body: JSON.stringify({ ...e, scamType: result?.scamType })
     });
     if (res.ok) setReported((r) => [...r, e.kind + ":" + e.value]);
-    else setError("Could not save the report. Try again.");
+    else setError((await res.json().catch(() => null))?.error || "Could not save the report. Try again.");
   }
 
   async function ask() {
@@ -143,7 +143,7 @@ export default function Home() {
 
           {result.entities.length > 0 && (
             <>
-              <h2>{t.community}</h2>
+              <h2>{result.community.length ? t.community : t.found}</h2>
               {result.entities.map((e) => {
                 const hit = isReported(e);
                 const key = e.kind + ":" + e.value;
